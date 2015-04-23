@@ -1,0 +1,2 @@
+# lightingminion
+Cedar OpenLighting minion
