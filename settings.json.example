@@ -1,0 +1,9 @@
+{
+    "mediauri": "file:///path/to/cedar/media", 
+    "framerate": "60/1", 
+    "server": "ws://localhost:3000/websocket", 
+    "width": 1280, 
+    "debug": true, 
+    "type": "media", 
+    "height": 720
+}
