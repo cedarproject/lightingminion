@@ -1,16 +1,51 @@
 import sys
 import json
+import time
 import array
 import asyncio
 import ddp_asyncio
 
 from ola.ClientWrapper import ClientWrapper
 
+class Fade:
+    def __init__(self, start, end, time, length, uni, channel):
+        self.start = start
+        self.curr = start
+        self.end = end
+        self.time = time
+        self.length = length
+        self.uni = uni
+        self.channel = channel
+        self.finished = False
+        
+    def tick(self):
+        currtime = time.time()
+        if currtime < self.time: return
+        
+        elapsed = currtime - self.time
+        
+        if self.curr < self.end:
+            try: self.curr = self.end / (self.length / elapsed)
+            except ZeroDivisionError: self.curr = self.end
+            if self.curr > self.end: self.curr = self.end
+
+        elif self.curr > self.end:
+            try: self.curr = 255 / (self.length / (self.length - elapsed))
+            except ZeroDivisionError: self.curr = self.end
+            if self.curr < self.end: self.curr = self.end
+
+        print(self.curr)
+        self.uni[self.channel] = int(self.curr)
+        
+        if self.curr == self.end:
+            self.finished = True        
+
 class LightingMinion:
     def __init__(self, config):
         self.config = config
         self.universes = {}
         self.wrapper = ClientWrapper()
+        self.fades = []
 
         asyncio.async(self.update())
         
@@ -48,11 +83,21 @@ class LightingMinion:
             
             uni = self.universes[channel['universe']]
             
-            uni[channel['address']] = int(light['values'].get(channel['type']) or 0) * 255
+            values = light['values']
+            if values.get('fade') and values['fade'] > 0:
+                self.fades.append(Fade(uni[channel['address']] * 255, values.get(channel['type']) * 255 or 0,
+                    values['time'], values['fade'], uni, channel['address']))
+            
+            else:
+                uni[channel['address']] = int(values.get(channel['type']) or 0) * 255
     
     @asyncio.coroutine
     def update(self):
         while True:
+            for fade in self.fades[:]:
+                fade.tick()
+                if fade.finished: self.fades.remove(fade)
+        
             for num, uni in self.universes.items():
                 self.wrapper.Client().SendDmx(num, uni, None)
                 
