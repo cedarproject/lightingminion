@@ -34,7 +34,6 @@ class Fade:
             except ZeroDivisionError: self.curr = self.end
             if self.curr < self.end: self.curr = self.end
 
-        print(self.curr)
         self.uni[self.channel] = int(self.curr)
         
         if self.curr == self.end:
