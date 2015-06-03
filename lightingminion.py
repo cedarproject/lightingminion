@@ -85,11 +85,11 @@ class LightingMinion:
             
             values = light['values']
             if values.get('fade') and values['fade'] > 0:
-                self.fades.append(Fade(uni[channel['address']] * 255, values.get(channel['type']) * 255 or 0,
-                    values['time'], values['fade'], uni, channel['address']))
+                self.fades.append(Fade(uni[channel['address'] - 1] * 255, values.get(channel['type']) * 255 or 0,
+                    values['time'], values['fade'], uni, channel['address'] - 1))
             
             else:
-                uni[channel['address']] = int(values.get(channel['type']) or 0) * 255
+                uni[channel['address'] - 1] = int(values.get(channel['type']) or 0) * 255
     
     @asyncio.coroutine
     def update(self):
