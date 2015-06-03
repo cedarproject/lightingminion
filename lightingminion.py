@@ -25,12 +25,12 @@ class Fade:
         elapsed = currtime - self.time
         
         if self.curr < self.end:
-            try: self.curr = self.end / (self.length / elapsed)
+            try: self.curr = self.start + (self.end - self.start) / (self.length / elapsed)
             except ZeroDivisionError: self.curr = self.end
             if self.curr > self.end: self.curr = self.end
 
         elif self.curr > self.end:
-            try: self.curr = 255 / (self.length / (self.length - elapsed))
+            try: self.curr = self.end + (self.start - self.end) / (self.length / (self.length - elapsed))
             except ZeroDivisionError: self.curr = self.end
             if self.curr < self.end: self.curr = self.end
 
@@ -84,7 +84,7 @@ class LightingMinion:
             
             values = light['values']
             if values.get('fade') and values['fade'] > 0:
-                self.fades.append(Fade(uni[channel['address'] - 1] * 255, values.get(channel['type']) * 255 or 0,
+                self.fades.append(Fade(uni[channel['address'] - 1], (values.get(channel['type']) or 0) * 255,
                     values['time'], values['fade'], uni, channel['address'] - 1))
             
             else:
