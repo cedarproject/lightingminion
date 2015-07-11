@@ -74,6 +74,7 @@ class LightingMinion:
     @asyncio.coroutine
     def changed(self, lightssub, lightid, data):
         light = self.lights[lightid]
+        settings = light['settings']
         self.debug('light changed: ', data)
         
         for channel in light['channels']:
@@ -82,14 +83,10 @@ class LightingMinion:
             
             uni = self.universes[channel['universe']]
             
-            values = light['values']
-            if values.get('fade') and values['fade'] > 0:
-                self.fades.append(Fade(uni[channel['address'] - 1], (values.get(channel['type']) or 0) * 255,
-                    values['time'], values['fade'], uni, channel['address'] - 1))
-            
-            else:
-                uni[channel['address'] - 1] = int(values.get(channel['type']) or 0) * 255
-    
+            value = light['values'][light['channels'].index(channel)]
+            self.fades.append(Fade(uni[channel['address'] - 1], (value or 0) * 255,
+                settings['time'], settings['fade'], uni, channel['address'] - 1))
+
     @asyncio.coroutine
     def update(self):
         while True:
