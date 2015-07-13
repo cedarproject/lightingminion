@@ -5,7 +5,7 @@ import array
 import asyncio
 import ddp_asyncio
 
-from ola.ClientWrapper import ClientWrapper
+from ola import OlaClient
 
 class Fade:
     def __init__(self, start, end, time, length, uni, channel):
@@ -43,8 +43,12 @@ class LightingMinion:
     def __init__(self, config):
         self.config = config
         self.universes = {}
-        self.wrapper = ClientWrapper()
         self.fades = []
+        
+        self.client = OlaClient.OlaClient()
+        self.sock = self.client.GetSocket()
+        
+        asyncio.get_event_loop().add_reader(self.sock, self.handle_ola_socket)
 
         asyncio.async(self.update())
         
@@ -52,6 +56,11 @@ class LightingMinion:
         if self.config.get('debug'):
             print(*args)
 
+    def handle_ola_socket(self):
+        self.debug('Handling socket!')
+        self.client.SocketReady()
+        self.debug('Socket handled!')
+            
     @asyncio.coroutine
     def connect(self):
         self.ddp = ddp_asyncio.DDPClient(self.config['server'])
@@ -95,10 +104,10 @@ class LightingMinion:
                 if fade.finished: self.fades.remove(fade)
         
             for num, uni in self.universes.items():
-                self.wrapper.Client().SendDmx(num, uni, None)
+                self.debug('writing dmx', self.client.SendDmx(num, uni, None))
                 
             yield from asyncio.sleep(0.02)
-        
+                    
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print('Usage: lightingminion.py <config file>')
