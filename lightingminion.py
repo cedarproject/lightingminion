@@ -47,6 +47,7 @@ class LightingMinion:
         
         self.client = OlaClient.OlaClient()
         self.sock = self.client.GetSocket()
+        self.sock.setblocking(False)
         
         asyncio.get_event_loop().add_reader(self.sock, self.handle_ola_socket)
 
@@ -57,9 +58,7 @@ class LightingMinion:
             print(*args)
 
     def handle_ola_socket(self):
-        self.debug('Handling socket!')
         self.client.SocketReady()
-        self.debug('Socket handled!')
             
     @asyncio.coroutine
     def connect(self):
@@ -104,7 +103,7 @@ class LightingMinion:
                 if fade.finished: self.fades.remove(fade)
         
             for num, uni in self.universes.items():
-                self.debug('writing dmx', self.client.SendDmx(num, uni, None))
+                self.client.SendDmx(num, uni, None)
                 
             yield from asyncio.sleep(0.02)
                     
