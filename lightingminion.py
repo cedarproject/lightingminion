@@ -43,7 +43,7 @@ class LightingMinion:
     def __init__(self, config):
         self.config = config
         self.universes = {}
-        self.fades = []
+        self.fades = {}
         
         self.client = OlaClient.OlaClient()
         self.sock = self.client.GetSocket()
@@ -88,19 +88,22 @@ class LightingMinion:
         for channel in light['channels']:
             if not self.universes.get(channel['universe']):
                 self.universes[channel['universe']] = array.array('B', [0] * 512)
+                self.fades[channel['universe']] = {}
             
-            uni = self.universes[channel['universe']]
-            
+            uni = self.universes[channel['universe']]            
             value = light['values'][light['channels'].index(channel)]
-            self.fades.append(Fade(uni[channel['address'] - 1], (value or 0) * 255,
-                settings['time'], settings['fade'], uni, channel['address'] - 1))
+
+            self.fades[channel['universe']][channel['address'] -1 ] = \
+                Fade(uni[channel['address'] - 1], (value or 0) * 255,
+                    settings['time'], settings['fade'], uni, channel['address'] - 1)
 
     @asyncio.coroutine
     def update(self):
         while True:
-            for fade in self.fades[:]:
-                fade.tick()
-                if fade.finished: self.fades.remove(fade)
+            for uni, fades in self.fades.items():
+                for addr, fade in tuple(fades.items()):
+                    fade.tick()
+                    if fade.finished: del self.fades[uni][addr]
         
             for num, uni in self.universes.items():
                 self.client.SendDmx(num, uni, None)
