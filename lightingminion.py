@@ -90,8 +90,11 @@ class LightingMinion:
                 self.universes[channel['universe']] = array.array('B', [0] * 512)
                 self.fades[channel['universe']] = {}
             
-            uni = self.universes[channel['universe']]            
-            value = light['values'][light['channels'].index(channel)]
+            uni = self.universes[channel['universe']]
+            try:
+                value = light['values'][light['channels'].index(channel)]
+            except IndexError:
+                continue
 
             self.fades[channel['universe']][channel['address'] -1 ] = \
                 Fade(uni[channel['address'] - 1], (value or 0) * 255,
