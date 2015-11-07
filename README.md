@@ -1,14 +1,14 @@
 # lightingminion
-Cedar's Lighting minion controls light fixtures via [http://openlighting.org/ola/ OpenLighting]. 
+Cedar's Lighting minion controls light fixtures via [OpenLighting](http://openlighting.org/ola/). 
 
 Requirements
 ============
 
-    * OLA
-    * OLA's Python libraries
-    * Python (2 or 3)
-    * python-meteor
-    
+* OLA
+* OLA's Python libraries
+* Python (2 or 3)
+* python-meteor
+ 
 On Debian/Ubuntu, dependencies can be installed with the commands:
 
     sudo apt-get install ola ola-python python3 python3-pip
