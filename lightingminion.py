@@ -1,14 +1,38 @@
+from __future__ import print_function # To support the splat operator in LightingMinion.debug()
+
 import sys
 import json
 import time
 import array
-import asyncio
-import ddp_asyncio
 
+from MeteorClient import MeteorClient
 from ola import OlaClient
 
+rate = 0.002
+
+class MeteorTime:
+    def __init__(self, meteor):
+        self.meteor = meteor
+        
+        self.latency = 0
+        self.last = 0
+        self.last_time = 0
+    
+    def update(self):
+        self.start = time.time()
+        self.meteor.call('getTime', [], self.callback)
+        
+    def callback(self, error, server_now):
+        now = time.time()
+        self.latency = now - self.start
+        self.last = (server_now - self.latency / 2) * 0.001
+        self.last_time = now
+        
+    def now(self):
+        return self.last + (time.time() - self.last_time)
+
 class Fade:
-    def __init__(self, start, end, time, length, uni, channel):
+    def __init__(self, start, end, time, length, uni, channel, meteortime):
         self.start = start
         self.curr = start
         self.end = end
@@ -16,10 +40,11 @@ class Fade:
         self.length = length
         self.uni = uni
         self.channel = channel
+        self.meteortime = meteortime
         self.finished = False
         
     def tick(self):
-        currtime = time.time()
+        currtime = self.meteortime.now()
         if currtime < self.time: return
         
         elapsed = currtime - self.time
@@ -45,80 +70,99 @@ class LightingMinion:
         self.universes = {}
         self.fades = {}
         
-        self.client = OlaClient.OlaClient()
-        self.sock = self.client.GetSocket()
-        self.sock.setblocking(False)
+        self.last = 0
+        self.ready = False
         
-        asyncio.get_event_loop().add_reader(self.sock, self.handle_ola_socket)
+        self.meteor = MeteorClient(self.config['server'])
+        self.meteor.on('connected', self.connect_cb)
+        self.meteor.connect()
+        
+    def connect_cb(self):
+        self.debug('Connection to Meteor established.')
 
-        asyncio.async(self.update())
+        if not self.config.get('id'):
+            self.debug('No id in settings, registering as new.')
+            self.meteor.call('minionNew', [self.config['type']], self.register)
+        
+        else:
+            self.register(None, self.config['id'])
+    
+    def register(self, err, id):
+        self.config['id'] = id
+        self.debug('Connecting with id ' + id)
+        self.meteor.call('minionConnect', [id], self.prep)
+
+    def prep(self, e, r):
+        self.meteortime = MeteorTime(self.meteor)
+        self.last_time_update = 0
+        
+        self.meteor.subscribe('lights')
+        self.meteor.on('added', self.added)
+        self.meteor.on('changed', self.changed)
+        
+        self.ola = OlaClient.OlaClient()
+        
+        self.ready = True
+        
+        print('Connected to server.')
         
     def debug(self, *args):
         if self.config.get('debug'):
             print(*args)
-
-    def handle_ola_socket(self):
-        self.client.SocketReady()
             
-    @asyncio.coroutine
-    def connect(self):
-        self.ddp = ddp_asyncio.DDPClient(self.config['server'])
-        yield from self.ddp.connect()
-
-        if not self.config.get('id'):
-            self.config['id'] = yield from self.ddp.call('minionNew', self.config['type'])
-
-        self.lightssub = yield from self.ddp.subscribe('lights', self.config['id'], ready_cb = self.ready, changed_cb = self.changed)
-        self.lights = self.lightssub.data
+    def added(self, collection, id, fields):
+        self.changed(collection, id, fields, None)
         
-        yield from self.ddp.call('minionConnect', self.config['id'])
-        self.debug('connected to server')
-        
-    @asyncio.coroutine
-    def ready(self, sub):
-        for lightid, light in self.lights.items():
-            yield from self.changed(self.lightssub, lightid, light)
-        
-    @asyncio.coroutine
-    def changed(self, lightssub, lightid, data):
-        light = self.lights[lightid]
+    def changed(self, collection, id, fields, cleared):
+        light = self.meteor.find_one('lights', selector={'_id': id})
         settings = light['settings']
-        self.debug('light changed: ', data)
         
-        for channel in light['channels']:
-            if not self.universes.get(channel['universe']):
-                self.universes[channel['universe']] = array.array('B', [0] * 512)
-                self.fades[channel['universe']] = {}
-            
-            uni = self.universes[channel['universe']]
-            try:
-                value = light['values'][light['channels'].index(channel)]
-            except IndexError:
-                continue
+        if light['minion'] == self.config['id']:
+            self.debug('light changed: ', light['title'], fields)
 
-            self.fades[channel['universe']][channel['address'] -1 ] = \
-                Fade(uni[channel['address'] - 1], (value or 0) * 255,
-                    settings['time'], settings['fade'], uni, channel['address'] - 1)
+            for channel in light['channels']:
+                uni_num = channel['universe']
 
-    @asyncio.coroutine
-    def update(self):
-        while True:
-            for uni, fades in self.fades.items():
-                for addr, fade in tuple(fades.items()):
-                    fade.tick()
-                    if fade.finished: del self.fades[uni][addr]
-        
-            for num, uni in self.universes.items():
-                self.client.SendDmx(num, uni, None)
+                if not self.universes.get(uni_num):
+                    self.universes[uni_num] = array.array('B', [0] * 512)
+                    self.fades[uni_num] = {}
                 
-            yield from asyncio.sleep(0.02)
+                uni = self.universes[uni_num]
+
+                addr = channel['address'] - 1
+                curr = uni[addr]
+
+                try:
+                    value = light['values'][light['channels'].index(channel)] * 255
+                except IndexError:
+                    continue
+
+                if not value == curr:
+                    self.fades[uni_num][addr] = Fade(uni[addr], value, settings['time'], settings['fade'], uni, addr, self.meteortime)
+
+    def run(self):
+        while True:
+            start = time.time()
+            if self.ready:
+                if start - self.last_time_update >= 1:
+                    self.meteortime.update()
+            
+                for uni, fades in self.fades.items():
+                    for addr, fade in tuple(fades.items()):
+                        fade.tick()
+                        if fade.finished: del self.fades[uni][addr]
+            
+                for num, uni in self.universes.items():
+                    self.ola.SendDmx(num, uni, None)
+            
+            try: time.sleep(rate - (time.time() - start))
+            except ValueError: continue
+            except IOError: continue
                     
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print('Usage: lightingminion.py <config file>')
         quit()
-        
-    loop = asyncio.get_event_loop()
     
     conffile = open(sys.argv[1], 'r+')
     config = json.load(conffile)
@@ -126,13 +170,14 @@ if __name__ == '__main__':
     config['type'] = 'lighting'
 
     minion = LightingMinion(config)
-    loop.run_until_complete(minion.connect())
     
-    conffile.seek(0)
-    json.dump(minion.config, conffile, indent = 4)
-    conffile.close()
-
     try:
-        loop.run_forever()
+        minion.run()
     except KeyboardInterrupt:
+        print('Shutting down...')
+        minion.meteor.close()
+
+        conffile.seek(0)
+        json.dump(minion.config, conffile, indent = 4)
+        conffile.close()
         quit()
