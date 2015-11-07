@@ -4,6 +4,7 @@ import sys
 import json
 import time
 import array
+import select
 
 from MeteorClient import MeteorClient
 from ola import OlaClient
@@ -94,13 +95,15 @@ class LightingMinion:
 
     def prep(self, e, r):
         self.meteortime = MeteorTime(self.meteor)
-        self.last_time_update = 0
         
         self.meteor.subscribe('lights')
         self.meteor.on('added', self.added)
         self.meteor.on('changed', self.changed)
         
         self.ola = OlaClient.OlaClient()
+        self.olasock = self.ola.GetSocket()
+        self.olasock.setblocking(False)
+        self.selectargs = ([self.olasock], [], [], 0)
         
         self.ready = True
         
@@ -143,9 +146,14 @@ class LightingMinion:
     def run(self):
         while True:
             start = time.time()
+
             if self.ready:
-                if start - self.last_time_update >= 1:
+                r, w, e = select.select(*self.selectargs)
+                if len(r) > 0: self.ola.SocketReady()
+
+                if start - self.last >= 1:
                     self.meteortime.update()
+                    self.last = time.time()
             
                 for uni, fades in self.fades.items():
                     for addr, fade in tuple(fades.items()):
