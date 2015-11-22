@@ -30,7 +30,7 @@ class MeteorTime:
         self.last_time = now
         
     def now(self):
-        return self.last + (time.time() - self.last_time)
+        return (self.last + (time.time() - self.last_time)) * 1000
 
 class Fade:
     def __init__(self, start, end, time, length, uni, channel, meteortime):
