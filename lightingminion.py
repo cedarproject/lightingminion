@@ -38,7 +38,7 @@ class Fade:
         self.curr = start
         self.end = end
         self.time = time
-        self.length = length
+        self.length = length * 1000 # Seconds to milliseconds
         self.uni = uni
         self.channel = channel
         self.meteortime = meteortime
