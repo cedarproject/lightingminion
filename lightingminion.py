@@ -118,7 +118,8 @@ class LightingMinion:
         
     def changed(self, collection, id, fields, cleared):
         light = self.meteor.find_one('lights', selector={'_id': id})
-        settings = light['settings']
+        settings = light.get('settings')
+        if not settings: return
         
         if light['minion'] == self.config['id']:
             self.debug('light changed: ', light['title'], fields)
