@@ -26,11 +26,11 @@ class MeteorTime:
     def callback(self, error, server_now):
         now = time.time()
         self.latency = now - self.start
-        self.last = (server_now - self.latency / 2) * 0.001
+        self.last = (server_now * 0.001 - self.latency / 2)
         self.last_time = now
         
     def now(self):
-        return (self.last + (time.time() - self.last_time)) * 1000
+        return self.last + (time.time() - self.last_time)
 
 class Fade:
     def __init__(self, start, end, time, length, uni, channel, meteortime):
@@ -38,7 +38,7 @@ class Fade:
         self.curr = start
         self.end = end
         self.time = time
-        self.length = length * 1000 # Seconds to milliseconds
+        self.length = length
         self.uni = uni
         self.channel = channel
         self.meteortime = meteortime
