@@ -33,7 +33,7 @@ class MeteorTime:
         return self.last + (time.time() - self.last_time)
 
 class Fade:
-    def __init__(self, start, end, time, length, uni, channel, meteortime):
+    def __init__(self, start, end, time, length, uni, channel):
         self.start = start
         self.curr = start
         self.end = end
@@ -41,11 +41,10 @@ class Fade:
         self.length = length
         self.uni = uni
         self.channel = channel
-        self.meteortime = meteortime
         self.finished = False
         
     def tick(self):
-        currtime = self.meteortime.now()
+        currtime = time.time()
         if currtime < self.time: return
         
         elapsed = currtime - self.time
@@ -142,7 +141,8 @@ class LightingMinion:
                     continue
 
                 if not value == curr:
-                    self.fades[uni_num][addr] = Fade(uni[addr], value, settings['time'], settings['fade'], uni, addr, self.meteortime)
+                    starttime = self.meteortime.now() - time.time() + settings['time'] # Calculate offset of server's time vs local system's time
+                    self.fades[uni_num][addr] = Fade(uni[addr], value, starttime, settings['fade'], uni, addr)
 
     def run(self):
         while True:
